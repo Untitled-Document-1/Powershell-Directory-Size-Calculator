@@ -90,12 +90,42 @@ function Add-TreeNode {
 
     $node = New-Object System.Windows.Forms.TreeNode
     $node.Text = $text
+    $node.Tag = $Folder
 
     $TreeCollection.Add($node) | Out-Null
 
     foreach ($child in $Folder.Children) {
         Add-TreeNode $node.Nodes $child $TotalSize
     }
+}
+
+function Update-FilePane {
+    param([System.Windows.Forms.TreeNode]$Node)
+
+    $fileList.Items.Clear()
+
+    if ($null -eq $Node -or $null -eq $Node.Tag) {
+        return
+    }
+
+    $folder = $Node.Tag
+    $files = @(Get-ChildItem -LiteralPath $folder.Path -File -Force -ErrorAction SilentlyContinue | Sort-Object Name)
+
+    $fileList.BeginUpdate()
+
+    foreach ($file in $files) {
+        $percent = 0
+        if ($folder.Size -gt 0) {
+            $percent = ($file.Length / $folder.Size) * 100
+        }
+
+        $item = New-Object System.Windows.Forms.ListViewItem($file.Name)
+        $item.SubItems.Add((Format-Size $file.Length)) | Out-Null
+        $item.SubItems.Add(("{0:N2}%" -f $percent)) | Out-Null
+        $fileList.Items.Add($item) | Out-Null
+    }
+
+    $fileList.EndUpdate()
 }
 
 function Start-Scan {
@@ -105,6 +135,7 @@ function Start-Scan {
     }
 
     $tree.Nodes.Clear()
+    $fileList.Items.Clear()
 
     $progress.Visible = $true
     $status.Text = "Scanning..."
@@ -128,6 +159,8 @@ function Start-Scan {
 
     if ($tree.Nodes.Count -gt 0) {
         $tree.Nodes[0].Expand()
+        $tree.SelectedNode = $tree.Nodes[0]
+        Update-FilePane -Node $tree.Nodes[0]
     }
 
     $progress.Visible = $false
@@ -176,6 +209,27 @@ $tree = New-Object System.Windows.Forms.TreeView
 $tree.Location = New-Object System.Drawing.Point(10, 80)
 $tree.Size = New-Object System.Drawing.Size(950, 540)
 $tree.Font = New-Object System.Drawing.Font("Consolas", 10)
+$tree.Dock = [System.Windows.Forms.DockStyle]::Fill
+$tree.ShowLines = $true
+
+$fileList = New-Object System.Windows.Forms.ListView
+$fileList.Dock = [System.Windows.Forms.DockStyle]::Fill
+$fileList.View = [System.Windows.Forms.View]::Details
+$fileList.FullRowSelect = $true
+$fileList.HideSelection = $false
+$fileList.Font = New-Object System.Drawing.Font("Consolas", 10)
+$fileList.Columns.Add("File", 520) | Out-Null
+$fileList.Columns.Add("Size", 140) | Out-Null
+$fileList.Columns.Add("Pct", 90) | Out-Null
+
+$splitContainer = New-Object System.Windows.Forms.SplitContainer
+$splitContainer.Orientation = [System.Windows.Forms.Orientation]::Horizontal
+$splitContainer.Location = New-Object System.Drawing.Point(10, 80)
+$splitContainer.Size = New-Object System.Drawing.Size(950, 540)
+$splitContainer.SplitterDistance = [int]($splitContainer.Size.Height / 2)
+$splitContainer.FixedPanel = [System.Windows.Forms.FixedPanel]::None
+$splitContainer.Panel1.Controls.Add($tree)
+$splitContainer.Panel2.Controls.Add($fileList)
 
 $status = New-Object System.Windows.Forms.Label
 $status.Location = New-Object System.Drawing.Point(10, 50)
@@ -193,7 +247,7 @@ $form.Controls.AddRange(@(
         $btnAbout,
         $btnClose,
         $txtFolder,
-        $tree,
+        $splitContainer,
         $status,
         $progress))
 
@@ -240,6 +294,11 @@ $btnAbout.Add_Click({
 
 $btnClose.Add_Click({
         $form.Close()
+    })
+
+$tree.Add_AfterSelect({
+        param($sender, $e)
+        Update-FilePane -Node $e.Node
     })
 
 [void]$form.ShowDialog()
