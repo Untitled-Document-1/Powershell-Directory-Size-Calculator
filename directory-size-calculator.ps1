@@ -41,7 +41,7 @@ function Get-FolderSize {
             $size += $_.Length
         }
 
-        $children = @()
+        $children = New-Object 'System.Collections.Generic.List[object]'
 
         Get-ChildItem -LiteralPath $Path -Directory -Force -ErrorAction SilentlyContinue |
         Sort-Object Name |
@@ -49,7 +49,7 @@ function Get-FolderSize {
 
             $child = Get-FolderSize $_.FullName $ProgressBar $StatusLabel
 
-            $children += $child
+            $children.Add($child)
 
             $size += $child.Size
         }
