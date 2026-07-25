@@ -212,6 +212,21 @@ $tree.Font = New-Object System.Drawing.Font("Consolas", 10)
 $tree.Dock = [System.Windows.Forms.DockStyle]::Fill
 $tree.ShowLines = $true
 
+$browseContextMenu = New-Object System.Windows.Forms.ContextMenuStrip
+$browseMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem
+$browseMenuItem.Text = "Browse to folder"
+$browseMenuItem.Add_Click({
+        $selectedNode = $tree.SelectedNode
+        if ($null -ne $selectedNode -and $null -ne $selectedNode.Tag) {
+            $folderPath = $selectedNode.Tag.Path
+            if (Test-Path -LiteralPath $folderPath -PathType Container) {
+                Start-Process -FilePath explorer.exe -ArgumentList $folderPath | Out-Null
+            }
+        }
+    })
+$browseContextMenu.Items.Add($browseMenuItem) | Out-Null
+$tree.ContextMenuStrip = $browseContextMenu
+
 $fileList = New-Object System.Windows.Forms.ListView
 $fileList.Dock = [System.Windows.Forms.DockStyle]::Fill
 $fileList.View = [System.Windows.Forms.View]::Details
@@ -297,8 +312,16 @@ $btnClose.Add_Click({
     })
 
 $tree.Add_AfterSelect({
-        param($sender, $e)
-        Update-FilePane -Node $e.Node
+        param($senderControl, $eventArgs)
+        Update-FilePane -Node $eventArgs.Node
+    })
+
+$tree.Add_NodeMouseClick({
+        param($senderControl, $eventArgs)
+        if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Right) {
+            $tree.SelectedNode = $eventArgs.Node
+            $browseContextMenu.Show($tree, $eventArgs.Location)
+        }
     })
 
 [void]$form.ShowDialog()
